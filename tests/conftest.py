@@ -3,7 +3,7 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from src.database import Base, get_session
+from src.database import Base, create_all_tables, get_session
 from src.main import app
 
 # Requires a running PostgreSQL instance. Start one with:
@@ -19,7 +19,7 @@ _TestSession = async_sessionmaker(_engine, expire_on_commit=False)
 async def reset_db():
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
+    await create_all_tables(_engine)
     yield
 
 
