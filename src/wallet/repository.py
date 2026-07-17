@@ -1,4 +1,6 @@
 import uuid
+from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,13 +52,25 @@ class WalletRepository:
         page_size: int = 20,
         type: TransactionType | None = None,
         status: TransactionStatus | None = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        min_amount: Decimal | None = None,
+        max_amount: Decimal | None = None,
     ) -> tuple[list[Transaction], int]:
-        # TODO: add start_date, end_date, min_amount, max_amount filters
+        """List a wallet's transactions with pagination and optional type/status/date/amount filters."""
         query = select(Transaction).where(Transaction.wallet_id == wallet_id)
         if type:
             query = query.where(Transaction.type == type)
         if status:
             query = query.where(Transaction.status == status)
+        if start_date:
+            query = query.where(Transaction.created_at >= start_date)
+        if end_date:
+            query = query.where(Transaction.created_at <= end_date)
+        if min_amount is not None:
+            query = query.where(Transaction.amount >= min_amount)
+        if max_amount is not None:
+            query = query.where(Transaction.amount <= max_amount)
 
         total = await self.session.scalar(select(func.count()).select_from(query.subquery()))
         rows = await self.session.execute(

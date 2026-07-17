@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -7,6 +8,10 @@ from src.database import engine, init_db
 from src.gateway.webhook_handler import router as webhook_router
 from src.wallet.router import router as wallet_router
 from src.agent.router import router as agent_router
+
+# Root logger is WARNING by default, which silently drops the app's `logger.info`/`logger.warning`
+# calls (e.g. in src/database.py, src/wallet/router.py). Configure it once at startup so they show up.
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 
 @asynccontextmanager

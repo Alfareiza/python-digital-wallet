@@ -25,12 +25,13 @@ usuários finais.
 
 ## 3. Atores
 
-| Ator             | Descrição                                                                   |
-|------------------|-----------------------------------------------------------------------------|
-| `Usuário`        | Usuário autenticado que possui uma ou mais carteiras                        |
-| `Admin`          | Operador interno que pode visualizar todas as carteiras e congelar contas   |
-| `Gateway`        | Provedor de pagamento externo (Stripe ou Mercado Pago) que processa E/S     |
-| `Agente de IA`   | Agente LLM que responde perguntas em linguagem natural sobre transações      |
+| Ator           | Descrição                                                                 |
+| -------------- | ------------------------------------------------------------------------- |
+| `Usuário`      | Usuário autenticado que possui uma ou mais carteiras                      |
+| `Admin`        | Operador interno que pode visualizar todas as carteiras e congelar contas |
+| `Gateway`      | Provedor de pagamento externo (Stripe ou Mercado Pago) que processa E/S   |
+| `Agente de IA` | Agente LLM que responde perguntas em linguagem natural sobre transações   |
+
 
 ---
 
@@ -38,74 +39,84 @@ usuários finais.
 
 ### 4.1 Gestão de Carteira
 
-| ID    | Requisito                                                                               |
-|-------|-----------------------------------------------------------------------------------------|
-| W-01  | Cada usuário pode ter exatamente uma carteira ativa                                     |
-| W-02  | A carteira armazena um saldo atual (sempre não-negativo)                                |
-| W-03  | A carteira pode estar em um destes estados: `ACTIVE`, `FROZEN`, `CLOSED`               |
-| W-04  | Atualizações de saldo devem ser atômicas — sem condições de corrida em requisições simultâneas |
+
+| ID   | Requisito                                                                                      |
+| ---- | ---------------------------------------------------------------------------------------------- |
+| W-01 | Cada usuário pode ter exatamente uma carteira ativa                                            |
+| W-02 | A carteira armazena um saldo atual (sempre não-negativo)                                       |
+| W-03 | A carteira pode estar em um destes estados: `ACTIVE`, `FROZEN`, `CLOSED`                       |
+| W-04 | Atualizações de saldo devem ser atômicas — sem condições de corrida em requisições simultâneas |
+
 
 ### 4.2 Depósito (Entrada)
 
-| ID    | Requisito                                                                               |
-|-------|-----------------------------------------------------------------------------------------|
-| D-01  | O usuário inicia um depósito especificando valor e método de pagamento                  |
-| D-02  | O sistema cria uma transação `PENDING` e chama o gateway de pagamento                  |
-| D-03  | Após confirmação do gateway, o saldo é creditado e a transação marcada como `COMPLETED` |
-| D-04  | Em caso de falha do gateway, a transação é marcada como `FAILED` — o saldo nunca é alterado |
-| D-05  | O webhook do gateway deve ser verificado (validação de assinatura) e idempotente        |
+| ID   | Requisito                                                                                   |
+| ---- | ------------------------------------------------------------------------------------------- |
+| D-01 | O usuário inicia um depósito especificando valor e método de pagamento                      |
+| D-02 | O sistema cria uma transação `PENDING` e chama o gateway de pagamento                       |
+| D-03 | Após confirmação do gateway, o saldo é creditado e a transação marcada como `COMPLETED`     |
+| D-04 | Em caso de falha do gateway, a transação é marcada como `FAILED` — o saldo nunca é alterado |
+| D-05 | O webhook do gateway deve ser verificado (validação de assinatura) e idempotente            |
+
 
 ### 4.3 Saque (Saída)
 
-| ID    | Requisito                                                                               |
-|-------|-----------------------------------------------------------------------------------------|
-| S-01  | O usuário inicia um saque especificando valor e destino (conta bancária/chave PIX)     |
-| S-02  | O saque só é permitido se `carteira.saldo >= valor`                                    |
-| S-03  | O saldo é debitado imediatamente (reservado) enquanto o gateway processa o pagamento   |
-| S-04  | Se o pagamento falhar, o saldo reservado é devolvido à carteira                        |
+| ID   | Requisito                                                                            |
+| ---- | ------------------------------------------------------------------------------------ |
+| S-01 | O usuário inicia um saque especificando valor e destino (conta bancária/chave PIX)   |
+| S-02 | O saque só é permitido se `carteira.saldo >= valor`                                  |
+| S-03 | O saldo é debitado imediatamente (reservado) enquanto o gateway processa o pagamento |
+| S-04 | Se o pagamento falhar, o saldo reservado é devolvido à carteira                      |
+
 
 ### 4.4 Transferência entre Usuários
 
-| ID    | Requisito                                                                               |
-|-------|-----------------------------------------------------------------------------------------|
-| T-01  | O usuário pode transferir fundos para outro usuário identificado por e-mail ou ID      |
-| T-02  | A carteira de origem deve ter saldo suficiente                                          |
-| T-03  | O débito e o crédito devem ocorrer em uma única operação atômica                       |
-| T-04  | Transferências são internas — não há chamada ao gateway                                 |
-| T-05  | Uma transferência cria dois registros de transação vinculados (débito + crédito)       |
+
+| ID   | Requisito                                                                         |
+| ---- | --------------------------------------------------------------------------------- |
+| T-01 | O usuário pode transferir fundos para outro usuário identificado por e-mail ou ID |
+| T-02 | A carteira de origem deve ter saldo suficiente                                    |
+| T-03 | O débito e o crédito devem ocorrer em uma única operação atômica                  |
+| T-04 | Transferências são internas — não há chamada ao gateway                           |
+| T-05 | Uma transferência cria dois registros de transação vinculados (débito + crédito)  |
+
+
+
 
 ### 4.5 Histórico de Transações
 
-| ID    | Requisito                                                                               |
-|-------|-----------------------------------------------------------------------------------------|
-| H-01  | Usuários podem listar suas próprias transações com paginação                           |
-| H-02  | Filtros: intervalo de datas, tipo de transação, status, intervalo de valor             |
-| H-03  | Cada registro expõe: id, tipo, valor, moeda, status, created_at, descrição,            |
-|       | contraparte (em transferências), gateway_reference (em transações com gateway)          |
+| ID   | Requisito                                                                      |
+| ---- | ------------------------------------------------------------------------------ |
+| H-01 | Usuários podem listar suas próprias transações com paginação                   |
+| H-02 | Filtros: intervalo de datas, tipo de transação, status, intervalo de valor     |
+| H-03 | Cada registro expõe: id, tipo, valor, moeda, status, created_at, descrição,    |
+|      | contraparte (em transferências), gateway_reference (em transações com gateway) |
+
 
 ### 4.6 Agente de Consultas
 
-| ID    | Requisito                                                                               |
-|-------|-----------------------------------------------------------------------------------------|
-| A-01  | O usuário envia uma pergunta em linguagem natural sobre suas próprias transações        |
-| A-02  | O agente tem acesso a ferramentas estruturadas para consultar os dados de transação     |
-| A-03  | O agente retorna uma resposta clara e concisa em linguagem natural                     |
-| A-04  | O agente não deve expor dados de outros usuários — todas as consultas são escopadas ao chamador |
-| A-05  | O agente suporta perguntas de acompanhamento dentro da mesma sessão (multi-turn)       |
-| A-06  | O agente pode gerar agregações simples: totais, médias, contagens, top-N               |
+| ID   | Requisito                                                                                       |
+| ---- | ----------------------------------------------------------------------------------------------- |
+| A-01 | O usuário envia uma pergunta em linguagem natural sobre suas próprias transações                |
+| A-02 | O agente tem acesso a ferramentas estruturadas para consultar os dados de transação             |
+| A-03 | O agente retorna uma resposta clara e concisa em linguagem natural                              |
+| A-04 | O agente não deve expor dados de outros usuários — todas as consultas são escopadas ao chamador |
+| A-05 | O agente suporta perguntas de acompanhamento dentro da mesma sessão (multi-turn)                |
+| A-06 | O agente pode gerar agregações simples: totais, médias, contagens, top-N                        |
+
 
 ---
 
 ## 5. Requisitos Não-Funcionais
 
-| Categoria        | Requisito                                                                         |
-|------------------|-----------------------------------------------------------------------------------|
-| Atomicidade      | Mutações de saldo devem usar bloqueio em nível de banco ou concorrência otimista   |
-| Idempotência     | Webhooks e operações de depósito/saque devem ser idempotentes                     |
-| Segurança        | Todos os endpoints requerem autenticação JWT; webhooks requerem validação HMAC    |
-| Observabilidade  | Logs estruturados em cada mudança de estado de transação                          |
-| Testabilidade    | A lógica de domínio deve ser testável sem dependências de infraestrutura          |
-| Portabilidade    | A aplicação roda via Docker; sem dependências no host                             |
+| Categoria       | Requisito                                                                        |
+| --------------- | -------------------------------------------------------------------------------- |
+| Atomicidade     | Mutações de saldo devem usar bloqueio em nível de banco ou concorrência otimista |
+| Idempotência    | Webhooks e operações de depósito/saque devem ser idempotentes                    |
+| Segurança       | Todos os endpoints requerem autenticação JWT; webhooks requerem validação HMAC   |
+| Observabilidade | Logs estruturados em cada mudança de estado de transação                         |
+| Testabilidade   | A lógica de domínio deve ser testável sem dependências de infraestrutura         |
+| Portabilidade   | A aplicação roda via Docker; sem dependências no host                            |
 
 ---
 
@@ -148,17 +159,19 @@ Transação
 O candidato pode escolher **um** dos gateways abaixo. O módulo de gateway deve ser abstraído
 por uma interface `PaymentGateway` para que a implementação possa ser substituída.
 
-| Opção          | Caso de Uso                           | Docs                                          |
-|----------------|---------------------------------------|-----------------------------------------------|
-| Stripe         | Depósito com cartão, payouts          | https://docs.stripe.com                       |
-| Mercado Pago   | PIX, boleto, cartão de crédito (BR)   | https://www.mercadopago.com.br/developers     |
+
+| Opção        | Caso de Uso                         | Docs                                                                                   |
+| ------------ | ----------------------------------- | -------------------------------------------------------------------------------------- |
+| Stripe       | Depósito com cartão, payouts        | [https://docs.stripe.com](https://docs.stripe.com)                                     |
+| Mercado Pago | PIX, boleto, cartão de crédito (BR) | [https://www.mercadopago.com.br/developers](https://www.mercadopago.com.br/developers) |
+
 
 **Requisitos mínimos de integração:**
 
-- Criar uma intenção de pagamento / preferência para depósitos
-- Receber e verificar um webhook para confirmar o pagamento
-- Iniciar um payout/transferência para saques
-- Tratar erros do gateway de forma adequada (chaves de idempotência, retentativas)
+- **Criar uma intenção de pagamento / preferência para depósitos**
+- **Receber e verificar um webhook para confirmar o pagamento**
+- **Iniciar um payout/transferência para saques**
+- **Tratar erros do gateway de forma adequada (chaves de idempo**tência, retentativas)
 
 ---
 
@@ -188,13 +201,15 @@ Resposta em Linguagem Natural
 
 O agente deve ser equipado com as seguintes ferramentas (implementadas como funções Python):
 
-| Ferramenta               | Descrição                                                          |
-|--------------------------|--------------------------------------------------------------------|
-| `get_wallet_summary`     | Retorna saldo atual, status e metadados da carteira                |
-| `list_transactions`      | Lista paginada com filtros (data, tipo, status, intervalo de valor)|
-| `aggregate_transactions` | SUM / AVG / COUNT / MAX / MIN agrupado por tipo, período ou status |
-| `get_top_transactions`   | Retorna N maiores / menores transações em um período               |
-| `get_transaction_detail` | Retorna detalhes completos de uma transação pelo ID                |
+
+| Ferramenta               | Descrição                                                           |
+| ------------------------ | ------------------------------------------------------------------- |
+| `get_wallet_summary`     | Retorna saldo atual, status e metadados da carteira                 |
+| `list_transactions`      | Lista paginada com filtros (data, tipo, status, intervalo de valor) |
+| `aggregate_transactions` | SUM / AVG / COUNT / MAX / MIN agrupado por tipo, período ou status  |
+| `get_top_transactions`   | Retorna N maiores / menores transações em um período                |
+| `get_transaction_detail` | Retorna detalhes completos de uma transação pelo ID                 |
+
 
 ### 8.4 Exemplos de Interação
 

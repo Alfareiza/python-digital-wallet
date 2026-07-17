@@ -1,10 +1,18 @@
+import logging
 import uuid
+from datetime import datetime
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.auth.models import User
+from src.auth.service import get_current_user
+from src.config import settings
 from src.database import get_session
 from src.gateway.base import PaymentGateway
+from src.gateway.stripe_gateway import StripeGateway
+from src.wallet.models import TransactionStatus, TransactionType
 from src.wallet.schemas import (
     DepositRequest,
     TransactionListResponse,
@@ -13,14 +21,27 @@ from src.wallet.schemas import (
     WalletResponse,
     WithdrawRequest,
 )
-from src.wallet.service import InsufficientFundsError, WalletFrozenError, WalletNotFoundError, WalletService
+from src.wallet.service import (
+    InsufficientFundsError,
+    TransactionNotFoundError,
+    WalletFrozenError,
+    WalletNotFoundError,
+    WalletService,
+)
 
 router = APIRouter()
 
+logger = logging.getLogger(__name__)
+
 
 def get_gateway() -> PaymentGateway:
-    # TODO: return the correct gateway instance based on settings.gateway_provider
-    raise NotImplementedError
+    """Resolve the configured payment gateway (only Stripe is currently supported)."""
+    if settings.gateway_provider != "stripe":
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail=f"Unsupported gateway_provider: {settings.gateway_provider}",
+        )
+    return StripeGateway(settings.stripe_secret_key, settings.stripe_webhook_secret)
 
 
 def get_wallet_service(
@@ -32,53 +53,125 @@ def get_wallet_service(
 
 @router.get("/wallet", response_model=WalletResponse)
 async def get_wallet(
+    current_user: User = Depends(get_current_user),
     service: WalletService = Depends(get_wallet_service),
 ):
-    # TODO: identify the current user and call service.get_wallet(user_id)
-    raise NotImplementedError
+    """Return the current user's wallet."""
+    try:
+        logger.info(f"User {current_user.id} requesting wallet info")
+        return await service.get_wallet(current_user.id)
+    except WalletNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.post("/wallet/deposit", response_model=TransactionResponse, status_code=status.HTTP_202_ACCEPTED)
 async def deposit(
     body: DepositRequest,
+    current_user: User = Depends(get_current_user),
     service: WalletService = Depends(get_wallet_service),
 ):
-    # TODO: identify the current user and call service.deposit(user_id, body)
-    raise NotImplementedError
+    """Initiate a deposit into the current user's wallet via the payment gateway."""
+    try:
+        return await service.deposit(current_user.id, body)
+    except WalletNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except WalletFrozenError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
 
 @router.post("/wallet/withdraw", response_model=TransactionResponse, status_code=status.HTTP_202_ACCEPTED)
 async def withdraw(
     body: WithdrawRequest,
+    current_user: User = Depends(get_current_user),
     service: WalletService = Depends(get_wallet_service),
 ):
-    # TODO: identify the current user and call service.withdraw(user_id, body)
-    raise NotImplementedError
+    """Initiate a withdrawal from the current user's wallet via the payment gateway."""
+    try:
+        return await service.withdraw(current_user.id, body)
+    except WalletNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except WalletFrozenError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except InsufficientFundsError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.post("/wallet/transfer", response_model=TransactionResponse, status_code=status.HTTP_201_CREATED)
 async def transfer(
     body: TransferRequest,
+    current_user: User = Depends(get_current_user),
     service: WalletService = Depends(get_wallet_service),
 ):
-    # TODO: identify the current user and call service.transfer(user_id, body)
-    raise NotImplementedError
+    """Transfer funds from the current user's wallet to another user's wallet, identified by email."""
+    try:
+        debit_transaction, _credit_transaction = await service.transfer(current_user.id, body)
+        return debit_transaction
+    except WalletNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except WalletFrozenError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except InsufficientFundsError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.get("/transactions", response_model=TransactionListResponse)
 async def list_transactions(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
+    type: TransactionType | None = Query(default=None),
+    status_filter: TransactionStatus | None = Query(default=None, alias="status"),
+    start_date: datetime | None = Query(default=None),
+    end_date: datetime | None = Query(default=None),
+    min_amount: Decimal | None = Query(default=None),
+    max_amount: Decimal | None = Query(default=None),
+    current_user: User = Depends(get_current_user),
     service: WalletService = Depends(get_wallet_service),
 ):
-    # TODO: identify the current user and list their transactions
-    raise NotImplementedError
+    """List the current user's transactions, paginated and optionally filtered."""
+    try:
+        items, total = await service.list_transactions(
+            current_user.id,
+            page=page,
+            page_size=page_size,
+            type=type,
+            status=status_filter,
+            start_date=start_date,
+            end_date=end_date,
+            min_amount=min_amount,
+            max_amount=max_amount,
+        )
+    except WalletNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return TransactionListResponse(items=items, total=total, page=page, page_size=page_size)
 
 
 @router.get("/transactions/{transaction_id}", response_model=TransactionResponse)
 async def get_transaction(
     transaction_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
     service: WalletService = Depends(get_wallet_service),
 ):
-    # TODO: identify the current user and fetch the transaction
-    raise NotImplementedError
+    """Fetch a single transaction belonging to the current user's wallet."""
+    try:
+        return await service.get_transaction(current_user.id, transaction_id)
+    except (WalletNotFoundError, TransactionNotFoundError) as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.post("/confirm-payment/{gateway_reference}", status_code=status.HTTP_200_OK)
+async def test_confirm_payment(
+    gateway_reference: str,
+    current_user: User = Depends(get_current_user),
+    gateway: PaymentGateway = Depends(get_gateway),
+):
+    """[TEST ONLY] Confirm a pending Stripe PaymentIntent to simulate customer payment (development/testing)."""
+    import httpx
+
+    async with httpx.AsyncClient(auth=(settings.stripe_secret_key, "")) as client:
+        response = await client.post(
+            f"https://api.stripe.com/v1/payment_intents/{gateway_reference}/confirm",
+            data={"payment_method": "pm_card_visa", "return_url": "https://example.com/return"},
+        )
+    response.raise_for_status()
+    return response.json()
+
