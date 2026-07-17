@@ -12,6 +12,7 @@ from src.agent.router import router as agent_router
 # Root logger is WARNING by default, which silently drops the app's `logger.info`/`logger.warning`
 # calls (e.g. in src/database.py, src/wallet/router.py). Configure it once at startup so they show up.
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager

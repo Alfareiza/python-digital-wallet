@@ -1,11 +1,14 @@
 import hashlib
 import hmac
 import json
+import logging
 from decimal import Decimal
 
 import httpx
 
 from src.gateway.base import PaymentIntent
+
+logger = logging.getLogger(__name__)
 
 STRIPE_API_BASE = "https://api.stripe.com/v1"
 
@@ -18,9 +21,10 @@ def _to_minor_units(amount: Decimal) -> int:
 class StripeGateway:
     """PaymentGateway implementation backed by direct REST calls to the Stripe API."""
 
-    def __init__(self, secret_key: str, webhook_secret: str = ""):
+    def __init__(self, secret_key: str, webhook_secret: str = "", *, simulate_payouts: bool = True):
         self._secret_key = secret_key
         self._webhook_secret = webhook_secret
+        self._simulate_payouts = simulate_payouts
 
     async def create_deposit_intent(self, amount: Decimal, currency: str, metadata: dict) -> PaymentIntent:
         """Create a Stripe PaymentIntent so the user can fund a deposit via card."""
@@ -36,22 +40,31 @@ class StripeGateway:
         return PaymentIntent(gateway_reference=data["id"], client_secret=data.get("client_secret"), status=data["status"])
 
     async def create_payout(self, amount: Decimal, destination: dict, metadata: dict) -> PaymentIntent:
-        """Create a Stripe Payout to send funds out for a withdrawal.
+        """Create a payout for a withdrawal.
 
-        NOTE: Stripe's Payout API only sends funds to the platform's own attached
-        bank account; routing to an arbitrary per-user `destination` requires Stripe
-        Connect (connected accounts + external account tokens), which is out of
-        scope here. `destination` is recorded as metadata for traceability only.
+        In simulate mode (default for local dev), returns a fake reference so the
+        withdraw flow can be completed via POST /confirm-payout/{gateway_reference}.
+        Real Stripe Payouts only pay out to the platform's own bank account; per-user
+        PIX/bank routing would require Stripe Connect — `destination` is stored for
+        traceability.
         """
+        transaction_id = metadata.get("transaction_id", "unknown")
+        if self._simulate_payouts:
+            return PaymentIntent(
+                gateway_reference=f"po_sim_{transaction_id}",
+                client_secret=None,
+                status="pending",
+            )
+
         payload = {
             "amount": str(_to_minor_units(amount)),
-            "currency": metadata.get("currency", "usd").lower(),
-            "metadata[destination]": str(destination),
+            "currency": metadata.get("currency", "BRL").lower(),
+            "metadata[destination]": json.dumps(destination),
         }
         for key, value in metadata.items():
             payload[f"metadata[{key}]"] = str(value)
 
-        data = await self._post("/payouts", payload, idempotency_key=metadata.get("transaction_id"))
+        data = await self._post("/payouts", payload, idempotency_key=transaction_id)
         return PaymentIntent(gateway_reference=data["id"], client_secret=None, status=data["status"])
 
     def verify_webhook(self, payload: bytes, signature: str) -> dict:
@@ -71,5 +84,7 @@ class StripeGateway:
         headers = {"Idempotency-Key": idempotency_key} if idempotency_key else {}
         async with httpx.AsyncClient(auth=(self._secret_key, "")) as client:
             response = await client.post(f"{STRIPE_API_BASE}{path}", data=payload, headers=headers)
+        if response.is_error:
+            logger.error("Stripe API error on %s: %s", path, response.text)
         response.raise_for_status()
         return response.json()

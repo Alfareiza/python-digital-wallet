@@ -23,6 +23,13 @@ class WalletRepository:
         )
         return result.scalar_one_or_none()
 
+    async def create(self, user_id: uuid.UUID) -> Wallet:
+        """Insert a new wallet for the user, relying on model defaults (balance 0, ACTIVE)."""
+        wallet = Wallet(user_id=user_id)
+        self.session.add(wallet)
+        await self.session.flush()
+        return wallet
+
     async def create_transaction(self, **kwargs) -> Transaction:
         tx = Transaction(**kwargs)
         self.session.add(tx)

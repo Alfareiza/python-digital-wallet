@@ -41,6 +41,19 @@ class WalletService:
             raise WalletNotFoundError(f"No wallet found for user {user_id}")
         return wallet
 
+    async def get_or_create_wallet(self, user_id: uuid.UUID) -> tuple[Wallet, bool]:
+        """Fetch the user's wallet, creating one (balance 0, ACTIVE) if none exists yet.
+
+        Returns (wallet, created) so callers can distinguish a fresh wallet from an existing one.
+        """
+        try:
+            return await self.get_wallet(user_id), False
+        except WalletNotFoundError:
+            wallet = await self.repo.create(user_id)
+            await self.session.commit()
+            await self.session.refresh(wallet)
+            return wallet, True
+
     async def deposit(self, user_id: uuid.UUID, request: DepositRequest) -> Transaction:
         """Create a pending deposit transaction and request a payment intent from the gateway."""
         wallet = await self.get_wallet(user_id)
@@ -99,7 +112,7 @@ class WalletService:
         try:
             intent = await self.gateway.create_payout(
                 amount=request.amount,
-                destination=request.destination,
+                destination=request.destination.model_dump(),
                 metadata={
                     "transaction_id": str(transaction.id),
                     "wallet_id": str(locked_wallet.id),
@@ -116,7 +129,10 @@ class WalletService:
             return transaction
 
         transaction.gateway_reference = intent.gateway_reference
-        transaction.extra_data = {"gateway_status": intent.status}
+        transaction.extra_data = {
+            "gateway_status": intent.status,
+            "destination": request.destination.model_dump(),
+        }
         await self.session.commit()
         await self.session.refresh(transaction)
         return transaction

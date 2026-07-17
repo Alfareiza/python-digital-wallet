@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.models import User
@@ -41,7 +41,11 @@ def get_gateway() -> PaymentGateway:
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
             detail=f"Unsupported gateway_provider: {settings.gateway_provider}",
         )
-    return StripeGateway(settings.stripe_secret_key, settings.stripe_webhook_secret)
+    return StripeGateway(
+        settings.stripe_secret_key,
+        settings.stripe_webhook_secret,
+        simulate_payouts=settings.stripe_simulate_payouts,
+    )
 
 
 def get_wallet_service(
@@ -52,16 +56,17 @@ def get_wallet_service(
 
 
 @router.get("/wallet", response_model=WalletResponse)
+@router.post("/wallet", response_model=WalletResponse)
 async def get_wallet(
+    response: Response,
     current_user: User = Depends(get_current_user),
     service: WalletService = Depends(get_wallet_service),
 ):
-    """Return the current user's wallet."""
-    try:
-        logger.info(f"User {current_user.id} requesting wallet info")
-        return await service.get_wallet(current_user.id)
-    except WalletNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    """Return the current user's wallet, creating one (balance 0, ACTIVE) if it doesn't exist yet."""
+    logger.info(f"User {current_user.id} requesting wallet info")
+    wallet, created = await service.get_or_create_wallet(current_user.id)
+    response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+    return wallet
 
 
 @router.post("/wallet/deposit", response_model=TransactionResponse, status_code=status.HTTP_202_ACCEPTED)
@@ -155,6 +160,30 @@ async def get_transaction(
     try:
         return await service.get_transaction(current_user.id, transaction_id)
     except (WalletNotFoundError, TransactionNotFoundError) as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.post("/confirm-payout/{gateway_reference}", response_model=TransactionResponse)
+async def test_confirm_payout(
+    gateway_reference: str,
+    current_user: User = Depends(get_current_user),
+    service: WalletService = Depends(get_wallet_service),
+):
+    """[TEST ONLY] Complete a pending simulated payout (development/testing).
+
+    Use after POST /wallet/withdraw when STRIPE_SIMULATE_PAYOUTS=true (the default).
+    Mirrors the deposit flow where POST /confirm-payment/{gateway_reference} completes
+    a pending PaymentIntent.
+    """
+    try:
+        wallet = await service.get_wallet(current_user.id)
+        transaction = await service.repo.get_by_gateway_reference(gateway_reference)
+        if transaction is None or transaction.wallet_id != wallet.id:
+            raise TransactionNotFoundError(f"No transaction for gateway reference {gateway_reference}")
+        return await service.confirm_payout(gateway_reference, succeeded=True)
+    except WalletNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except TransactionNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
