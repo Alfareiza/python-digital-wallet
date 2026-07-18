@@ -48,5 +48,5 @@ async def receive_webhook(
             detail=f"No transaction found for gateway reference {gateway_reference}",
         )
 
-    logger.info("Processed %s for transaction %s (status=%s)", event_type, transaction.id, transaction.status)
+    logger.info(f"Processed {event_type} for transaction {transaction.id} (status={transaction.status})")
     return {"received": True}

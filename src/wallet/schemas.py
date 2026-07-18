@@ -3,7 +3,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from src.wallet.models import TransactionStatus, TransactionType, WalletStatus
 
@@ -54,8 +54,18 @@ class WithdrawRequest(BaseModel):
 
 class TransferRequest(BaseModel):
     amount: Decimal = Field(gt=0, decimal_places=2)
-    recipient_email: str
+    recipient_email: str | None = None
+    recipient_id: uuid.UUID | None = None
     description: str | None = None
+
+    @model_validator(mode="after")
+    def validate_recipient(self) -> "TransferRequest":
+        """Require exactly one recipient identifier: email or user id."""
+        has_email = self.recipient_email is not None
+        has_id = self.recipient_id is not None
+        if has_email == has_id:
+            raise ValueError("Exactly one of recipient_email or recipient_id must be provided")
+        return self
 
 
 class TransactionResponse(BaseModel):

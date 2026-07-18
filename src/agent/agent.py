@@ -1,9 +1,13 @@
+import logging
+
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool
 
 from src.agent.session import ConversationSession
 from src.config import settings
+
+logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """Você é um assistente financeiro que ajuda usuários a entender sua carteira \
 e histórico de transações. Use as ferramentas disponíveis para fundamentar suas respostas em \
@@ -37,7 +41,8 @@ async def chat(
     session: ConversationSession,
     tools: list[BaseTool],
 ) -> str:
-    llm = get_llm().bind_tools(tools)
+    """Run the tool-calling loop for one user turn, appending messages to `session` in place."""
+    llm = get_llm().bind_tools(tools)  # tells the model it may call tools and what they are.
     tool_map = {t.name: t for t in tools}
 
     session.messages.append(HumanMessage(content=message))
@@ -59,6 +64,7 @@ async def chat(
                 try:
                     result = await tool.ainvoke(tool_call["args"])
                 except Exception as e:
+                    logger.warning(f"Tool {tool_call['name']} failed for call {tool_call['id']}: {e}")
                     result = {"error": str(e)}
 
             session.messages.append(

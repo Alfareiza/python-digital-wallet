@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 from decimal import Decimal
 
 import pytest
@@ -11,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from src.config import settings
 from src.database import Base, create_all_tables, get_session
 from src.main import app
-from src.wallet.models import Wallet, WalletStatus
+from src.wallet.models import Transaction, TransactionStatus, TransactionType, Wallet, WalletStatus
 
 # Tests only run inside the `api` container (`docker compose exec api pytest`), against a
 # disposable database on the same `db` service — see `settings.test_database_url`.
@@ -39,6 +40,43 @@ def make_wallet():
         )
 
     return _make_wallet
+
+
+@pytest.fixture
+def register_user(client: AsyncClient):
+    """Return an async factory that registers and logs in a user, returning bearer auth headers."""
+
+    async def _register_user(email: str, password: str = "supersecret123") -> dict[str, str]:
+        """Register `email` via the API and return the `Authorization` header for its access token."""
+        await client.post("/auth/register", json={"email": email, "password": password, "name": "Test User"})
+        login = await client.post("/auth/token", data={"username": email, "password": password})
+        return {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+    return _register_user
+
+
+@pytest.fixture
+def make_transaction(db_session: AsyncSession):
+    """Return an async factory that inserts a Transaction row with sensible defaults."""
+
+    async def _make_transaction(*, wallet_id: uuid.UUID, **kwargs) -> Transaction:
+        """Insert and commit a Transaction for wallet_id, applying defaults unless overridden."""
+        transaction = Transaction(
+            id=kwargs.pop("id", uuid.uuid4()),
+            wallet_id=wallet_id,
+            type=kwargs.pop("type", TransactionType.DEPOSIT),
+            amount=kwargs.pop("amount", Decimal("10.00")),
+            balance_before=kwargs.pop("balance_before", Decimal("0.00")),
+            balance_after=kwargs.pop("balance_after", Decimal("10.00")),
+            status=kwargs.pop("status", TransactionStatus.COMPLETED),
+            created_at=kwargs.pop("created_at", datetime.now(timezone.utc)),
+            **kwargs,
+        )
+        db_session.add(transaction)
+        await db_session.commit()
+        return transaction
+
+    return _make_transaction
 
 
 @pytest_asyncio.fixture(scope="session", autouse=True)

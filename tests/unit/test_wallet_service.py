@@ -37,9 +37,10 @@ class FakeWalletRepository:
         self.recipient_wallet = recipient_wallet
 
     async def get_by_user_id(self, user_id: uuid.UUID) -> Wallet | None:
-        """Return the wallet if it matches the given user_id, else None."""
-        if self.wallet is not None and self.wallet.user_id == user_id:
-            return self.wallet
+        """Return the wallet whose user_id matches, checking both sender and recipient slots."""
+        for wallet in (self.wallet, self.recipient_wallet):
+            if wallet is not None and wallet.user_id == user_id:
+                return wallet
         return None
 
     async def get_for_update(self, wallet_id: uuid.UUID) -> Wallet | None:

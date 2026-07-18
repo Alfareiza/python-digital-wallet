@@ -85,6 +85,7 @@ class StripeGateway:
         async with httpx.AsyncClient(auth=(self._secret_key, "")) as client:
             response = await client.post(f"{STRIPE_API_BASE}{path}", data=payload, headers=headers)
         if response.is_error:
-            logger.error("Stripe API error on %s: %s", path, response.text)
+            logger.error(f"Stripe API error on {path}: {response.text}")
+       
         response.raise_for_status()
         return response.json()

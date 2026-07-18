@@ -1,9 +1,27 @@
 import uuid
+from datetime import datetime
 from typing import Optional
 
 from langchain_core.tools import BaseTool, tool
 
+from src.wallet.models import Transaction, TransactionStatus, TransactionType
 from src.wallet.repository import WalletRepository
+
+
+def _serialize_transaction(transaction: Transaction) -> dict:
+    """Convert a Transaction row into a JSON-friendly dict for tool results."""
+    return {
+        "id": str(transaction.id),
+        "type": transaction.type,
+        "amount": str(transaction.amount),
+        "status": transaction.status,
+        "description": transaction.description,
+        "counterpart_transaction_id": (
+            str(transaction.counterpart_transaction_id) if transaction.counterpart_transaction_id else None
+        ),
+        "gateway_reference": transaction.gateway_reference,
+        "created_at": transaction.created_at.isoformat(),
+    }
 
 
 def build_tools(repo: WalletRepository, user_id: uuid.UUID) -> list[BaseTool]:
@@ -12,11 +30,18 @@ def build_tools(repo: WalletRepository, user_id: uuid.UUID) -> list[BaseTool]:
     All tool queries must operate exclusively on data belonging to user_id.
     """
 
+    async def _get_wallet():
+        """Fetch the caller's wallet or raise so the agent loop reports it as a graceful tool error."""
+        wallet = await repo.get_by_user_id(user_id)
+        if wallet is None:
+            raise ValueError("No wallet found for this user")
+        return wallet
+
     @tool
     async def get_wallet_summary() -> dict:
         """Returns the current wallet balance, status, and metadata."""
-        # TODO: implement — fetch wallet by user_id
-        raise NotImplementedError
+        wallet = await _get_wallet()
+        return {"balance": str(wallet.balance), "currency": wallet.currency, "status": wallet.status}
 
     @tool
     async def list_transactions(
@@ -32,8 +57,16 @@ def build_tools(repo: WalletRepository, user_id: uuid.UUID) -> list[BaseTool]:
         status: PENDING | COMPLETED | FAILED | REVERSED
         start_date / end_date: ISO 8601 date strings (e.g. '2026-01-01')
         """
-        # TODO: implement — query transactions scoped to user_id
-        raise NotImplementedError
+        wallet = await _get_wallet()
+        transactions, total = await repo.list_transactions(
+            wallet.id,
+            page_size=limit,
+            type=TransactionType(type) if type else None,
+            status=TransactionStatus(status) if status else TransactionStatus.COMPLETED,
+            start_date=datetime.fromisoformat(start_date) if start_date else None,
+            end_date=datetime.fromisoformat(end_date) if end_date else None,
+        )
+        return {"total": total, "transactions": [_serialize_transaction(t) for t in transactions]}
 
     @tool
     async def aggregate_transactions(
@@ -47,8 +80,15 @@ def build_tools(repo: WalletRepository, user_id: uuid.UUID) -> list[BaseTool]:
         operation: SUM | AVG | COUNT | MAX | MIN
         type: optional transaction type filter
         """
-        # TODO: implement — run aggregation scoped to user_id
-        raise NotImplementedError
+        wallet = await _get_wallet()
+        value, count = await repo.aggregate_transactions(
+            wallet.id,
+            operation=operation.upper(),
+            type=TransactionType(type) if type else None,
+            start_date=datetime.fromisoformat(start_date) if start_date else None,
+            end_date=datetime.fromisoformat(end_date) if end_date else None,
+        )
+        return {"operation": operation.upper(), "value": str(value) if value is not None else None, "count": count}
 
     @tool
     async def get_top_transactions(
@@ -62,14 +102,25 @@ def build_tools(repo: WalletRepository, user_id: uuid.UUID) -> list[BaseTool]:
         Returns the N largest or smallest transactions.
         order: 'largest' | 'smallest'
         """
-        # TODO: implement — query top-N transactions scoped to user_id
-        raise NotImplementedError
+        wallet = await _get_wallet()
+        transactions = await repo.get_top_transactions(
+            wallet.id,
+            n=n,
+            order=order,
+            type=TransactionType(type) if type else None,
+            start_date=datetime.fromisoformat(start_date) if start_date else None,
+            end_date=datetime.fromisoformat(end_date) if end_date else None,
+        )
+        return {"transactions": [_serialize_transaction(t) for t in transactions]}
 
     @tool
     async def get_transaction_detail(transaction_id: str) -> dict:
         """Returns full details of a single transaction by its UUID."""
-        # TODO: implement — fetch transaction and verify it belongs to user_id
-        raise NotImplementedError
+        wallet = await _get_wallet()
+        transaction = await repo.get_transaction(uuid.UUID(transaction_id), wallet.id)
+        if transaction is None:
+            raise ValueError(f"Transaction {transaction_id} not found")
+        return _serialize_transaction(transaction)
 
     return [
         get_wallet_summary,

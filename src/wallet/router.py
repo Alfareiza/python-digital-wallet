@@ -1,9 +1,11 @@
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from pydantic import BeforeValidator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.models import User
@@ -32,6 +34,35 @@ from src.wallet.service import (
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
+
+DATE_FORMAT = "%d/%m/%Y"
+
+
+def _parse_start_date(value: str | datetime | None) -> datetime | None:
+    """Parse a DD/MM/YYYY `start_date` query param as the beginning of that day (00:00:00 UTC)."""
+    if value is None or isinstance(value, datetime):
+        return value
+    try:
+        return datetime.strptime(value, DATE_FORMAT).replace(tzinfo=timezone.utc)
+    except ValueError as exc:
+        raise ValueError(f"start_date must be in {DATE_FORMAT} format") from exc
+
+
+def _parse_end_date(value: str | datetime | None) -> datetime | None:
+    """Parse a DD/MM/YYYY `end_date` query param as the end of that day (23:59:59.999999 UTC)."""
+    if value is None or isinstance(value, datetime):
+        return value
+    try:
+        parsed = datetime.strptime(value, DATE_FORMAT)
+    except ValueError as exc:
+        raise ValueError(f"end_date must be in {DATE_FORMAT} format") from exc
+    return parsed.replace(hour=23, minute=59, second=59, microsecond=999999, tzinfo=timezone.utc)
+
+
+StartDateQuery = Annotated[
+    datetime | None, BeforeValidator(_parse_start_date), Query(description="Format: DD/MM/YYYY")
+]
+EndDateQuery = Annotated[datetime | None, BeforeValidator(_parse_end_date), Query(description="Format: DD/MM/YYYY")]
 
 
 def get_gateway() -> PaymentGateway:
@@ -107,7 +138,7 @@ async def transfer(
     current_user: User = Depends(get_current_user),
     service: WalletService = Depends(get_wallet_service),
 ):
-    """Transfer funds from the current user's wallet to another user's wallet, identified by email."""
+    """Transfer funds from the current user's wallet to another user's wallet, identified by email or user id."""
     try:
         debit_transaction, _credit_transaction = await service.transfer(current_user.id, body)
         return debit_transaction
@@ -125,8 +156,8 @@ async def list_transactions(
     page_size: int = Query(default=20, ge=1, le=100),
     type: TransactionType | None = Query(default=None),
     status_filter: TransactionStatus | None = Query(default=None, alias="status"),
-    start_date: datetime | None = Query(default=None),
-    end_date: datetime | None = Query(default=None),
+    start_date: StartDateQuery = None,
+    end_date: EndDateQuery = None,
     min_amount: Decimal | None = Query(default=None),
     max_amount: Decimal | None = Query(default=None),
     current_user: User = Depends(get_current_user),

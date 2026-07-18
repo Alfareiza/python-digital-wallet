@@ -141,12 +141,17 @@ class WalletService:
         """Atomically debit the sender and credit the recipient, linking both transactions."""
         sender_wallet = await self.get_wallet(sender_user_id)
 
-        result = await self.session.execute(
-            select(Wallet).join(User, User.id == Wallet.user_id).where(User.email == request.recipient_email)
-        )
-        recipient_wallet = result.scalar_one_or_none()
-        if recipient_wallet is None:
-            raise WalletNotFoundError(f"No wallet found for recipient {request.recipient_email}")
+        if request.recipient_id is not None:
+            recipient_wallet = await self.repo.get_by_user_id(request.recipient_id)
+            if recipient_wallet is None:
+                raise WalletNotFoundError(f"No wallet found for recipient {request.recipient_id}")
+        else:
+            result = await self.session.execute(
+                select(Wallet).join(User, User.id == Wallet.user_id).where(User.email == request.recipient_email)
+            )
+            recipient_wallet = result.scalar_one_or_none()
+            if recipient_wallet is None:
+                raise WalletNotFoundError(f"No wallet found for recipient {request.recipient_email}")
 
         # Lock both wallets in a consistent (ascending id) order to avoid deadlocks.
         first_id, second_id = sorted([sender_wallet.id, recipient_wallet.id])
