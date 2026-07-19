@@ -10,8 +10,6 @@ Documento de referência para **revisores da entrevista técnica**. Resume o que
 
 O diagrama abaixo mostra as camadas do sistema, os sistemas externos e o fluxo principal de dados.
 
-**[Abrir diagrama interativo no Excalidraw](https://excalidraw.com/#json=4BurBKNaPTsvvdZdBGFN7,GBXu8YKltzbqvxVWhNRz9g)**
-
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Cliente HTTP / Usuário                    │
@@ -290,4 +288,3 @@ Logs estruturados (`logging.info`) em:
 - [BUSINESS_SPEC.md](BUSINESS_SPEC.md) — requisitos funcionais
 - [TECHNICAL_SPEC.md](TECHNICAL_SPEC.md) — stack e padrões
 - [AUTH_GUIDE.md](AUTH_GUIDE.md) — guia de autenticação
-- [Diagrama Excalidraw](https://excalidraw.com/#json=4BurBKNaPTsvvdZdBGFN7,GBXu8YKltzbqvxVWhNRz9g) — arquitetura visual
