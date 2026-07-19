@@ -1,4 +1,3 @@
-import logging
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -11,9 +10,11 @@ from src.gateway.base import PaymentGateway
 from src.wallet.models import Transaction, TransactionStatus, TransactionType, Wallet, WalletStatus
 from src.wallet.repository import WalletRepository
 from src.wallet.schemas import DepositRequest, TransferRequest, WithdrawRequest
-
-
-logger = logging.getLogger(__name__)
+from src.wallet.transaction_logging import (
+    log_transaction_created,
+    log_transaction_idempotent_skip,
+    log_transaction_status_change,
+)
 
 class InsufficientFundsError(Exception):
     pass
@@ -71,6 +72,7 @@ class WalletService:
             status=TransactionStatus.PENDING,
             description=request.description,
         )
+        log_transaction_created(transaction, reason="deposit_initiated")
 
         try:
             intent = await self.gateway.create_deposit_intent(
@@ -80,7 +82,13 @@ class WalletService:
             )
         except Exception:
             # D-04: gateway failure never touches the balance, only marks the transaction FAILED.
+            previous_status = transaction.status
             transaction.status = TransactionStatus.FAILED
+            log_transaction_status_change(
+                transaction,
+                previous_status=previous_status,
+                reason="deposit_gateway_failed",
+            )
             await self.session.commit()
             await self.session.refresh(transaction)
             return transaction
@@ -110,6 +118,7 @@ class WalletService:
             status=TransactionStatus.PENDING,
             description=request.description,
         )
+        log_transaction_created(transaction, reason="withdraw_initiated")
         await self.session.commit()
 
         try:
@@ -126,7 +135,14 @@ class WalletService:
             # S-04: release the reservation and mark FAILED when the gateway rejects the payout.
             refreshed_wallet = await self.repo.get_for_update(locked_wallet.id)
             refreshed_wallet.balance += request.amount
+            previous_status = transaction.status
             transaction.status = TransactionStatus.FAILED
+            transaction.balance_after = refreshed_wallet.balance
+            log_transaction_status_change(
+                transaction,
+                previous_status=previous_status,
+                reason="withdraw_gateway_failed",
+            )
             await self.session.commit()
             await self.session.refresh(transaction)
             return transaction
@@ -182,6 +198,7 @@ class WalletService:
             status=TransactionStatus.COMPLETED,
             description=request.description,
         )
+        log_transaction_created(debit_tx, reason="transfer_debit")
         credit_tx = await self.repo.create_transaction(
             wallet_id=locked_recipient.id,
             type=TransactionType.TRANSFER_CREDIT,
@@ -192,6 +209,7 @@ class WalletService:
             description=request.description,
             counterpart_transaction_id=debit_tx.id,
         )
+        log_transaction_created(credit_tx, reason="transfer_credit")
         debit_tx.counterpart_transaction_id = credit_tx.id
 
         await self.session.commit()
@@ -240,21 +258,34 @@ class WalletService:
         if transaction is None:
             return None
         if transaction.status in (TransactionStatus.COMPLETED, TransactionStatus.FAILED):
-            logger.info(f"Transaction {gateway_reference!r} already {transaction.status!r}")
+            log_transaction_idempotent_skip(
+                transaction,
+                reason=f"deposit_confirm_already_{transaction.status.lower()}",
+            )
             return transaction  # already terminal — idempotent no-op
 
+        previous_status = transaction.status
         if succeeded:
             locked_wallet = await self.repo.get_for_update(transaction.wallet_id)
             transaction.balance_before = locked_wallet.balance
             locked_wallet.balance += transaction.amount
             transaction.balance_after = locked_wallet.balance
             transaction.status = TransactionStatus.COMPLETED
+            log_transaction_status_change(
+                transaction,
+                previous_status=previous_status,
+                reason="deposit_confirmed",
+            )
         else:
             transaction.status = TransactionStatus.FAILED
+            log_transaction_status_change(
+                transaction,
+                previous_status=previous_status,
+                reason="deposit_failed",
+            )
 
         await self.session.commit()
         await self.session.refresh(transaction)
-        logger.info(f"Updated transaction {gateway_reference!r} to {transaction.status!r}")
         return transaction
 
     async def confirm_payout(self, gateway_reference: str, succeeded: bool) -> Transaction | None:
@@ -263,14 +294,30 @@ class WalletService:
         if transaction is None:
             return None
         if transaction.status in (TransactionStatus.COMPLETED, TransactionStatus.FAILED):
+            log_transaction_idempotent_skip(
+                transaction,
+                reason=f"payout_confirm_already_{transaction.status.lower()}",
+            )
             return transaction  # already terminal — idempotent no-op
 
+        previous_status = transaction.status
         if succeeded:
             transaction.status = TransactionStatus.COMPLETED
+            log_transaction_status_change(
+                transaction,
+                previous_status=previous_status,
+                reason="payout_confirmed",
+            )
         else:
             locked_wallet = await self.repo.get_for_update(transaction.wallet_id)
             locked_wallet.balance += transaction.amount
+            transaction.balance_after = locked_wallet.balance
             transaction.status = TransactionStatus.FAILED
+            log_transaction_status_change(
+                transaction,
+                previous_status=previous_status,
+                reason="payout_failed",
+            )
 
         await self.session.commit()
         await self.session.refresh(transaction)
