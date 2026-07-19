@@ -8,7 +8,6 @@ import hashlib
 import hmac
 import json
 import time
-import uuid
 from decimal import Decimal
 
 import httpx
@@ -26,20 +25,14 @@ STRIPE_PAYMENT_INTENTS_URL = "https://api.stripe.com/v1/payment_intents"
 
 class TestDepositWebhookFlow:
     @respx.mock
-    async def test_webhook_credits_balance_on_payment_success(self, client: AsyncClient, db_session: AsyncSession):
+    async def test_webhook_credits_balance_on_payment_success(
+        self, client: AsyncClient, db_session: AsyncSession, register_user
+    ):
         """Verify deposit + success webhook credits balance and marks transaction COMPLETED."""
-        # 1. Register a user and obtain a JWT
-        register = await client.post(
-            "/auth/register",
-            json={"email": "deposit.success@example.com", "password": "supersecret123", "name": "Deposit Success"},
-        )
-        user_id = register.json()["id"]
-        login = await client.post(
-            "/auth/token", data={"username": "deposit.success@example.com", "password": "supersecret123"}
-        )
-        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        user = await register_user("deposit.success@example.com", name="Deposit Success")
+        headers = user.headers
 
-        db_session.add(Wallet(user_id=uuid.UUID(user_id), balance=Decimal("0.00"), status=WalletStatus.ACTIVE))
+        db_session.add(Wallet(user_id=user.id, balance=Decimal("0.00"), status=WalletStatus.ACTIVE))
         await db_session.commit()
 
         respx.post(STRIPE_PAYMENT_INTENTS_URL).mock(
@@ -80,19 +73,12 @@ class TestDepositWebhookFlow:
         assert tx_resp.json()["status"] == "COMPLETED"
 
     @respx.mock
-    async def test_webhook_is_idempotent(self, client: AsyncClient, db_session: AsyncSession):
+    async def test_webhook_is_idempotent(self, client: AsyncClient, db_session: AsyncSession, register_user):
         """Verify posting the same webhook event twice credits balance only once."""
-        register = await client.post(
-            "/auth/register",
-            json={"email": "deposit.idempotent@example.com", "password": "supersecret123", "name": "Deposit Idem"},
-        )
-        user_id = register.json()["id"]
-        login = await client.post(
-            "/auth/token", data={"username": "deposit.idempotent@example.com", "password": "supersecret123"}
-        )
-        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        user = await register_user("deposit.idempotent@example.com", name="Deposit Idem")
+        headers = user.headers
 
-        db_session.add(Wallet(user_id=uuid.UUID(user_id), balance=Decimal("0.00"), status=WalletStatus.ACTIVE))
+        db_session.add(Wallet(user_id=user.id, balance=Decimal("0.00"), status=WalletStatus.ACTIVE))
         await db_session.commit()
 
         respx.post(STRIPE_PAYMENT_INTENTS_URL).mock(
@@ -126,19 +112,14 @@ class TestDepositWebhookFlow:
         assert Decimal(wallet_resp.json()["balance"]) == Decimal("75.00")
 
     @respx.mock
-    async def test_duplicate_gateway_reference_is_rejected(self, client: AsyncClient, db_session: AsyncSession):
+    async def test_duplicate_gateway_reference_is_rejected(
+        self, client: AsyncClient, db_session: AsyncSession, register_user
+    ):
         """Verify the gateway_reference UNIQUE constraint prevents duplicate deposits from succeeding."""
-        register = await client.post(
-            "/auth/register",
-            json={"email": "deposit.duplicate@example.com", "password": "supersecret123", "name": "Deposit Dup"},
-        )
-        user_id = register.json()["id"]
-        login = await client.post(
-            "/auth/token", data={"username": "deposit.duplicate@example.com", "password": "supersecret123"}
-        )
-        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        user = await register_user("deposit.duplicate@example.com", name="Deposit Dup")
+        headers = user.headers
 
-        db_session.add(Wallet(user_id=uuid.UUID(user_id), balance=Decimal("0.00"), status=WalletStatus.ACTIVE))
+        db_session.add(Wallet(user_id=user.id, balance=Decimal("0.00"), status=WalletStatus.ACTIVE))
         await db_session.commit()
 
         # The gateway_reference column has a UNIQUE constraint. Two deposits that resolve to

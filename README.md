@@ -15,6 +15,7 @@ Projeto técnico de entrevista. Construa uma **Carteira Digital** em Python com:
 | ------------------------------------------------ | ----------------------------------------------------------------------------------- |
 | [docs/BUSINESS_SPEC.md](docs/BUSINESS_SPEC.md)   | O que construir — regras de domínio, requisitos funcionais, especificação do agente |
 | [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md) | Stack sugerida, estrutura de projeto, padrões de design                             |
+| [docs/SUBMISSION.md](docs/SUBMISSION.md)         | **Entrega do candidato** — checklist, arquitetura, decisões de design e guia para revisores |
 
 
 ---
@@ -84,8 +85,8 @@ instância do serviço `db` (via `settings.test_database_url`), isolado do banco
 
 O repositório inclui:
 
-- `src/` — skeleton com modelos, schemas e rotas. **Toda a lógica de negócio é** `raise NotImplementedError` — sua missão é implementá-la.
-- `tests/` — estrutura de testes com casos nomeados para guiar a cobertura.
+- `src/` — modelos, schemas e rotas; a **lógica de negócio foi implementada** (service, repository, gateway, agente).
+- `tests/` — 50 testes (unitários + integração) cobrindo domínio, gateway, API e agente.
 - `pyproject.toml`, `Dockerfile`, `docker-compose.yml` — prontos para uso.
 
 ---
@@ -94,9 +95,13 @@ O repositório inclui:
 
 ## Entregáveis
 
+A entrega completa — checklist, diagrama de arquitetura, decisões de design e guia para revisores — está em **[docs/SUBMISSION.md](docs/SUBMISSION.md)**.
+
+Resumo:
+
 1. **Implementação funcional** que sobe com `docker compose up`
-2. **Testes** — unitários para a lógica de domínio (sem DB) e ao menos um teste de integração ponta a ponta
-3. **Seção no README** explicando as escolhas de design feitas (gateway escolhido, decisões de arquitetura, trade-offs)
+2. **Testes** — unitários para a lógica de domínio (sem DB) e integração ponta a ponta (`docker compose exec api pytest`)
+3. **Documentação de decisões** — gateway escolhido, arquitetura, trade-offs e mapeamento aos critérios de avaliação
 
 ---
 

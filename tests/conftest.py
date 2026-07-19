@@ -9,6 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from src.auth.models import User
 from src.config import settings
 from src.database import Base, create_all_tables, get_session
 from src.main import app
@@ -43,14 +44,21 @@ def make_wallet():
 
 
 @pytest.fixture
-def register_user(client: AsyncClient):
-    """Return an async factory that registers and logs in a user, returning bearer auth headers."""
+def register_user(client: AsyncClient, db_session: AsyncSession):
+    """Return an async factory that registers and logs in a user, returning the User with `.headers` set."""
 
-    async def _register_user(email: str, password: str = "supersecret123") -> dict[str, str]:
-        """Register `email` via the API and return the `Authorization` header for its access token."""
-        await client.post("/auth/register", json={"email": email, "password": password, "name": "Test User"})
+    async def _register_user(email: str, password: str = "supersecret123", *, name: str = "Test User") -> User:
+        """Register `email` via the API and return its User row with bearer auth headers attached."""
+        register_resp = await client.post(
+            "/auth/register", json={"email": email, "password": password, "name": name}
+        )
+        register_resp.raise_for_status()
+        user = await db_session.get(User, uuid.UUID(register_resp.json()["id"]))
+        assert user is not None
         login = await client.post("/auth/token", data={"username": email, "password": password})
-        return {"Authorization": f"Bearer {login.json()['access_token']}"}
+        login.raise_for_status()
+        user.headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        return user
 
     return _register_user
 

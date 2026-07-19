@@ -224,19 +224,6 @@ async def test_confirm_payment(
     current_user: User = Depends(get_current_user),
     gateway: PaymentGateway = Depends(get_gateway),
 ):
-    """[TEST ONLY] Confirm a pending Stripe PaymentIntent to simulate customer payment (development/testing).
-    
-    Using curl, this is the snippet to call the same stripe endpoint
-    curl -X POST https://api.stripe.com/v1/payment_intents/pi_3TtzE6EVk7D7KBoh1N0h99Dk/confirm 
-    -H "Authorization: Bearer xyz" -d "payment_method=pm_card_visa" -d "return_url=http://localhost:8000/return"
-    """
-    import httpx
-
-    async with httpx.AsyncClient(auth=(settings.stripe_secret_key, "")) as client:
-        response = await client.post(
-            f"https://api.stripe.com/v1/payment_intents/{gateway_reference}/confirm",
-            data={"payment_method": "pm_card_visa", "return_url": "https://example.com/return"},
-        )
-    response.raise_for_status()
-    return response.json()
+    """[TEST ONLY] Confirm a pending Stripe PaymentIntent to simulate customer payment (development/testing)."""
+    return await gateway.confirm_payment(gateway_reference)
 

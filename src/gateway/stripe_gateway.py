@@ -79,6 +79,24 @@ class StripeGateway:
             raise ValueError("Invalid Stripe webhook signature")
         return json.loads(payload)
 
+    async def confirm_payment(self, payment_intent_id: str) -> dict:
+        """[TEST ONLY] Confirm a pending Stripe PaymentIntent (development/testing).
+
+        Simulates customer payment by confirming a PaymentIntent with a test card.
+        Uses pm_card_visa as the payment method.
+
+        Args:
+            payment_intent_id: The Stripe PaymentIntent ID to confirm.
+
+        Returns:
+            The confirmed PaymentIntent response from Stripe API.
+        """
+        payload = {
+            "payment_method": "pm_card_visa",
+            "return_url": "https://example.com/return",
+        }
+        return await self._post(f"/payment_intents/{payment_intent_id}/confirm", payload, idempotency_key=None)
+
     async def _post(self, path: str, payload: dict, idempotency_key: str | None) -> dict:
         """Send an authenticated, idempotency-keyed POST request to the Stripe REST API."""
         headers = {"Idempotency-Key": idempotency_key} if idempotency_key else {}
@@ -86,6 +104,6 @@ class StripeGateway:
             response = await client.post(f"{STRIPE_API_BASE}{path}", data=payload, headers=headers)
         if response.is_error:
             logger.error(f"Stripe API error on {path}: {response.text}")
-       
+
         response.raise_for_status()
         return response.json()

@@ -115,6 +115,7 @@ class WalletRepository:
         *,
         operation: str,
         type: TransactionType | None = None,
+        status: TransactionStatus | None = None,
         start_date: datetime | None = None,
         end_date: datetime | None = None,
     ) -> tuple[Decimal | int | None, int]:
@@ -124,7 +125,7 @@ class WalletRepository:
             raise ValueError(f"Unsupported operation: {operation!r}. Use one of {sorted(aggregate_fns)}")
 
         subquery = self._filtered_transactions(
-            wallet_id, type=type, start_date=start_date, end_date=end_date
+            wallet_id, type=type, status=status, start_date=start_date, end_date=end_date
         ).subquery()
         value = await self.session.scalar(select(aggregate_fns[operation](subquery.c.amount)))
         count = await self.session.scalar(select(func.count()).select_from(subquery))
@@ -137,11 +138,14 @@ class WalletRepository:
         n: int = 5,
         order: str = "largest",
         type: TransactionType | None = None,
+        status: TransactionStatus | None = None,
         start_date: datetime | None = None,
         end_date: datetime | None = None,
     ) -> list[Transaction]:
         """Return the N largest or smallest transactions for a wallet matching the given filters."""
         sort = Transaction.amount.desc() if order == "largest" else Transaction.amount.asc()
-        query = self._filtered_transactions(wallet_id, type=type, start_date=start_date, end_date=end_date)
+        query = self._filtered_transactions(
+            wallet_id, type=type, status=status, start_date=start_date, end_date=end_date
+        )
         rows = await self.session.execute(query.order_by(sort).limit(n))
         return list(rows.scalars().all())

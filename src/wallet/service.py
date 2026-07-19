@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -11,6 +12,8 @@ from src.wallet.models import Transaction, TransactionStatus, TransactionType, W
 from src.wallet.repository import WalletRepository
 from src.wallet.schemas import DepositRequest, TransferRequest, WithdrawRequest
 
+
+logger = logging.getLogger(__name__)
 
 class InsufficientFundsError(Exception):
     pass
@@ -237,6 +240,7 @@ class WalletService:
         if transaction is None:
             return None
         if transaction.status in (TransactionStatus.COMPLETED, TransactionStatus.FAILED):
+            logger.info(f"Transaction {gateway_reference!r} already {transaction.status!r}")
             return transaction  # already terminal — idempotent no-op
 
         if succeeded:
@@ -250,6 +254,7 @@ class WalletService:
 
         await self.session.commit()
         await self.session.refresh(transaction)
+        logger.info(f"Updated transaction {gateway_reference!r} to {transaction.status!r}")
         return transaction
 
     async def confirm_payout(self, gateway_reference: str, succeeded: bool) -> Transaction | None:

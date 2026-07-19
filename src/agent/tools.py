@@ -72,19 +72,22 @@ def build_tools(repo: WalletRepository, user_id: uuid.UUID) -> list[BaseTool]:
     async def aggregate_transactions(
         operation: str,
         type: Optional[str] = None,
+        status: Optional[str] = None,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
     ) -> dict:
         """
-        Computes an aggregation over the user's transactions.
+        Computes an aggregation over the user's transactions (defaults to COMPLETED status).
         operation: SUM | AVG | COUNT | MAX | MIN
         type: optional transaction type filter
+        status: PENDING | COMPLETED | FAILED | REVERSED (defaults to COMPLETED)
         """
         wallet = await _get_wallet()
         value, count = await repo.aggregate_transactions(
             wallet.id,
             operation=operation.upper(),
             type=TransactionType(type) if type else None,
+            status=TransactionStatus(status) if status else TransactionStatus.COMPLETED,
             start_date=datetime.fromisoformat(start_date) if start_date else None,
             end_date=datetime.fromisoformat(end_date) if end_date else None,
         )
@@ -95,12 +98,14 @@ def build_tools(repo: WalletRepository, user_id: uuid.UUID) -> list[BaseTool]:
         n: int = 5,
         order: str = "largest",
         type: Optional[str] = None,
+        status: Optional[str] = None,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
     ) -> dict:
         """
-        Returns the N largest or smallest transactions.
+        Returns the N largest or smallest transactions (defaults to COMPLETED status).
         order: 'largest' | 'smallest'
+        status: PENDING | COMPLETED | FAILED | REVERSED (defaults to COMPLETED)
         """
         wallet = await _get_wallet()
         transactions = await repo.get_top_transactions(
@@ -108,6 +113,7 @@ def build_tools(repo: WalletRepository, user_id: uuid.UUID) -> list[BaseTool]:
             n=n,
             order=order,
             type=TransactionType(type) if type else None,
+            status=TransactionStatus(status) if status else TransactionStatus.COMPLETED,
             start_date=datetime.fromisoformat(start_date) if start_date else None,
             end_date=datetime.fromisoformat(end_date) if end_date else None,
         )
