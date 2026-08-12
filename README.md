@@ -6,6 +6,43 @@ Carteira digital em Python com:
 - Integração com gateway de pagamento (Stripe)
 - Agente de IA para consultas em linguagem natural (Anthropic Claude com tool use via LangChain)
 
+## Arquitetura
+
+```mermaid
+flowchart TB
+    Client["Cliente HTTP"]
+
+    subgraph API["FastAPI"]
+        Auth["/auth — JWT"]
+        Wallet["/wallet · /transactions"]
+        Agent["/agent/chat"]
+        Webhooks["/webhooks/gateway — HMAC"]
+    end
+
+    Service["WalletService"]
+    Repo["WalletRepository"]
+    Tools["Agent + Tools — LangChain"]
+    DB[(PostgreSQL)]
+    LLM["Claude / OpenAI"]
+    Stripe["StripeGateway"]
+
+    Client -->|JWT Bearer| Auth
+    Client -->|JWT Bearer| Wallet
+    Client -->|JWT Bearer| Agent
+    Client --> Webhooks
+
+    Auth --> Service
+    Wallet --> Service
+    Webhooks --> Service
+    Agent --> Tools
+
+    Service --> Repo
+    Service --> Stripe
+    Tools --> Repo
+    Tools --> LLM
+    Repo --> DB
+```
+
 ---
 
 ## Documentação
