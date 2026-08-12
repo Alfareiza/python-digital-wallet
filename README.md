@@ -1,26 +1,25 @@
-# Wallet Interview Challenge
+# Virtual Wallet
 
-Projeto técnico de entrevista. Construa uma **Carteira Digital** em Python com:
+Carteira digital em Python com:
 
 - API REST (FastAPI + PostgreSQL)
-- Integração com gateway de pagamento (Stripe ou Mercado Pago)
-- Agente de IA para consultas em linguagem natural (Anthropic Claude com tool use)
+- Integração com gateway de pagamento (Stripe)
+- Agente de IA para consultas em linguagem natural (Anthropic Claude com tool use via LangChain)
 
 ---
 
-## Leia antes de começar
+## Documentação
 
 
-| Documento                                        | Conteúdo                                                                            |
-| ------------------------------------------------ | ----------------------------------------------------------------------------------- |
-| [docs/BUSINESS_SPEC.md](docs/BUSINESS_SPEC.md)   | O que construir — regras de domínio, requisitos funcionais, especificação do agente |
-| [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md) | Stack sugerida, estrutura de projeto, padrões de design                             |
-| [docs/SUBMISSION.md](docs/SUBMISSION.md)         | **Entrega do candidato** — checklist, arquitetura, decisões de design e guia para revisores |
+| Documento                                              | Conteúdo                                                                  |
+| ------------------------------------------------------ | ------------------------------------------------------------------------- |
+| [docs/BUSINESS_SPEC.md](docs/BUSINESS_SPEC.md)         | Regras de domínio, requisitos funcionais e especificação do agente        |
+| [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md)       | Stack, estrutura do projeto e padrões de design                           |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)           | Arquitetura, decisões de design e trade-offs                              |
+| [docs/AUTH_GUIDE.md](docs/AUTH_GUIDE.md)               | Guia de autenticação JWT                                                  |
 
 
 ---
-
-
 
 ## Como começar
 
@@ -63,8 +62,6 @@ webhooks para `payout.paid` / `payout.failed`.
 
 ---
 
-
-
 ## Como rodar os testes
 
 Os testes só rodam dentro do container `api` — não é necessário Python/pytest na máquina host. Com a API e o
@@ -79,46 +76,24 @@ instância do serviço `db` (via `settings.test_database_url`), isolado do banco
 
 ---
 
+## Estrutura
 
-
-## O que já está aqui
-
-O repositório inclui:
-
-- `src/` — modelos, schemas e rotas; a **lógica de negócio foi implementada** (service, repository, gateway, agente).
-- `tests/` — 50 testes (unitários + integração) cobrindo domínio, gateway, API e agente.
-- `pyproject.toml`, `Dockerfile`, `docker-compose.yml` — prontos para uso.
-
----
-
-
-
-## Entregáveis
-
-A entrega completa — checklist, diagrama de arquitetura, decisões de design e guia para revisores — está em **[docs/SUBMISSION.md](docs/SUBMISSION.md)**.
-
-Resumo:
-
-1. **Implementação funcional** que sobe com `docker compose up`
-2. **Testes** — unitários para a lógica de domínio (sem DB) e integração ponta a ponta (`docker compose exec api pytest`)
-3. **Documentação de decisões** — gateway escolhido, arquitetura, trade-offs e mapeamento aos critérios de avaliação
+```
+src/
+  auth/       — registro e autenticação JWT
+  wallet/     — domínio da carteira (service, repository, router)
+  gateway/    — abstração PaymentGateway + Stripe
+  agent/      — agente LLM com tool use (LangChain)
+tests/
+  unit/       — domínio e ferramentas do agente (sem DB/HTTP)
+  integration/ — fluxos E2E via AsyncClient
+```
 
 ---
 
-
-
-## Prazo estimado
-
-4–8 horas. Priorize correção e clareza em vez de completude. Uma implementação parcial bem projetada vale mais do que uma implementação completa e apressada.
-
----
-
-
-
-## Restrições
+## Requisitos
 
 - Python 3.11+
-- Deve rodar via Docker — sem dependências no host
-- Use LangChain para o agente — o provider de LLM deve ser trocável via configuração
+- Docker / Docker Compose
+- LangChain para o agente — o provider de LLM é trocável via configuração
 - Sem frontend — apenas a API
-

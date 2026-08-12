@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
@@ -43,7 +44,7 @@ async def chat(
 ) -> str:
     """Run the tool-calling loop for one user turn, appending messages to `session` in place."""
     llm = get_llm().bind_tools(tools)  # tells the model it may call tools and what they are.
-    tool_map = {t.name: t for t in tools}
+    tool_map: dict[str, BaseTool] = {t.name: t for t in tools}
 
     session.messages.append(HumanMessage(content=message))
 
@@ -56,8 +57,9 @@ async def chat(
         if not response.tool_calls:
             return response.content if isinstance(response.content, str) else str(response.content)
 
-        for tool_call in response.tool_calls:
-            tool = tool_map.get(tool_call["name"])
+        tools_to_be_called: list[dict[str, Any]] = response.tool_calls
+        for tool_call in tools_to_be_called:
+            tool: BaseTool = tool_map.get(tool_call["name"])
             if tool is None:
                 result = {"error": f"Unknown tool: {tool_call['name']}"}
             else:

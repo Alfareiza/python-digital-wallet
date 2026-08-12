@@ -18,7 +18,7 @@ from src.wallet.models import Transaction, TransactionStatus, TransactionType, W
 
 
 # ---------------------------------------------------------------------------
-# Fakes — implement these as part of your submission
+# Fakes — in-memory WalletRepository for isolated tool tests
 # ---------------------------------------------------------------------------
 
 class FakeWalletRepository:

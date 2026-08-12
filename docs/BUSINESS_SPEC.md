@@ -1,13 +1,10 @@
 # Especificação de Negócio — Carteira Digital com Gateway de Pagamento e Agente de IA
 
-## 1. Problema
+## 1. Visão Geral
 
-Projete e implemente um sistema de **Carteira Digital** que permita aos usuários gerenciar seu saldo,
-realizar transações financeiras por meio de um gateway de pagamento externo e consultar seu histórico
-de transações em linguagem natural por meio de um agente de IA.
-
-Este projeto avalia a capacidade do candidato de integrar sistemas externos, modelar domínios limpos,
-construir APIs REST e trabalhar com agentes baseados em LLM em um contexto real.
+Sistema de **Carteira Digital** que permite aos usuários gerenciar saldo, realizar transações
+financeiras por meio de um gateway de pagamento externo e consultar o histórico de transações em
+linguagem natural por meio de um agente de IA.
 
 ---
 
@@ -183,8 +180,9 @@ Transação
 
 ## 7. Integração com Gateway de Pagamento
 
-O candidato pode escolher **um** dos gateways abaixo. O módulo de gateway deve ser abstraído
-por uma interface `PaymentGateway` para que a implementação possa ser substituída.
+O módulo de gateway é abstraído pela interface `PaymentGateway`, permitindo trocar o provedor
+sem alterar a lógica de domínio. A implementação atual usa **Stripe**; Mercado Pago permanece
+como opção futura atrás do mesmo protocolo.
 
 
 | Opção        | Caso de Uso                         | Docs                                                                                   |
@@ -302,7 +300,7 @@ GET    /agent/sessions/{id}        — recuperar histórico da conversa
 
 ## 10. Fora do Escopo
 
-Os itens abaixo estão explicitamente excluídos do escopo do desafio:
+Os itens abaixo estão explicitamente excluídos do escopo atual:
 
 - Conversão entre múltiplas moedas
 - Fluxos de chargeback / disputa

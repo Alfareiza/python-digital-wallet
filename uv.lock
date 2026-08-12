@@ -1814,7 +1814,7 @@ wheels = [
 ]
 
 [[package]]
-name = "wallet-interview"
+name = "wallet"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

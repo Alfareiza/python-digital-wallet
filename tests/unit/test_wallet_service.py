@@ -21,7 +21,7 @@ from src.wallet.service import (
 
 
 # ---------------------------------------------------------------------------
-# Fakes — implement these as part of your submission
+# Fakes — in-memory doubles for WalletRepository / session
 # ---------------------------------------------------------------------------
 
 class FakeWalletRepository:

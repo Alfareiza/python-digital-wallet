@@ -1,14 +1,10 @@
-# Entrega — Carteira Digital
+# Arquitetura — Carteira Digital
 
-Documento de referência para **revisores da entrevista técnica**. Resume o que foi implementado, como validar, e como cada decisão responde aos quatro eixos de avaliação do desafio:
-
-> *Este projeto avalia a capacidade do candidato de **integrar sistemas externos**, **modelar domínios limpos**, **construir APIs REST** e **trabalhar com agentes baseados em LLM** em um contexto real.*
+Visão geral da arquitetura, decisões de design e como validar o sistema localmente.
 
 ---
 
 ## Diagrama de arquitetura
-
-O diagrama abaixo mostra as camadas do sistema, os sistemas externos e o fluxo principal de dados.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -38,38 +34,32 @@ O diagrama abaixo mostra as camadas do sistema, os sistemas externos e o fluxo p
 
 ---
 
-## Checklist de entregáveis
+## Capacidades
 
-| # | Entregável | Status | Evidência |
-|---|------------|--------|-----------|
-| 1 | API sobe com `docker compose up` | ✅ | `Dockerfile`, `docker-compose.yml`, `src/main.py` |
-| 2 | Autenticação JWT (`/auth/register`, `/auth/token`) | ✅ | `src/auth/router.py`, `src/auth/service.py` |
-| 3 | Gestão de carteira (W-01..W-04) | ✅ | `src/wallet/service.py`, `src/wallet/repository.py` |
-| 4 | Depósito via gateway + webhook idempotente (D-01..D-05) | ✅ | `WalletService.deposit`, `confirm_deposit`, `webhook_handler.py` |
-| 5 | Saque com reserva de saldo (S-01..S-04) | ✅ | `WalletService.withdraw`, `confirm_payout` |
-| 6 | Transferência atômica entre usuários (T-01..T-05) | ✅ | `WalletService.transfer` (lock ordenado) |
-| 7 | Histórico paginado e filtrado (H-01..H-03) | ✅ | `GET /transactions`, `GET /transactions/{id}` |
-| 8 | Agente LLM com 5 ferramentas (A-01..A-06) | ✅ | `src/agent/tools.py`, `src/agent/agent.py` |
-| 9 | Integração Stripe abstraída por protocolo | ✅ | `src/gateway/base.py`, `src/gateway/stripe_gateway.py` |
-| 10 | Testes unitários de domínio (sem DB) | ✅ | `tests/unit/test_wallet_service.py` (13 casos) |
-| 11 | Testes unitários das ferramentas do agente | ✅ | `tests/unit/test_agent_tools.py` (14 casos) |
-| 12 | Testes de integração ponta a ponta | ✅ | `tests/integration/` (23 casos) |
-| 13 | **50 testes passando** | ✅ | `docker compose exec api pytest` |
-| 14 | Documentação de decisões de design | ✅ | Este documento |
+| Área | Status | Onde |
+|------|--------|------|
+| API sobe com `docker compose up` | ✅ | `Dockerfile`, `docker-compose.yml`, `src/main.py` |
+| Autenticação JWT (`/auth/register`, `/auth/token`) | ✅ | `src/auth/` |
+| Gestão de carteira (W-01..W-04) | ✅ | `src/wallet/service.py`, `repository.py` |
+| Depósito via gateway + webhook idempotente (D-01..D-05) | ✅ | `WalletService.deposit`, `confirm_deposit`, `webhook_handler.py` |
+| Saque com reserva de saldo (S-01..S-04) | ✅ | `WalletService.withdraw`, `confirm_payout` |
+| Transferência atômica entre usuários (T-01..T-05) | ✅ | `WalletService.transfer` (lock ordenado) |
+| Histórico paginado e filtrado (H-01..H-03) | ✅ | `GET /transactions`, `GET /transactions/{id}` |
+| Agente LLM com 5 ferramentas (A-01..A-06) | ✅ | `src/agent/tools.py`, `agent.py` |
+| Integração Stripe abstraída por protocolo | ✅ | `src/gateway/base.py`, `stripe_gateway.py` |
+| Testes unitários e de integração | ✅ | `tests/` (~50 casos) |
 
 ### Fora do escopo (conforme BUSINESS_SPEC §10)
 
 | Item | Status |
 |------|--------|
-| Mercado Pago | ❌ Não implementado — Stripe escolhido |
-| Dashboard admin / congelar contas | ❌ Explicitamente fora do escopo |
-| KYC, chargeback, multi-moeda | ❌ Fora do escopo |
+| Mercado Pago | Não implementado — Stripe escolhido |
+| Dashboard admin / congelar contas | Explicitamente fora do escopo |
+| KYC, chargeback, multi-moeda | Fora do escopo |
 
 ---
 
-## Mapeamento aos eixos de avaliação
-
-### 1. Integração com sistemas externos
+## Integrações externas
 
 | Integração | Implementação | Arquivo principal |
 |------------|---------------|-------------------|
@@ -90,7 +80,9 @@ POST /wallet/deposit
   → confirm_deposit → credita saldo → COMPLETED
 ```
 
-### 2. Modelagem de domínio limpa
+---
+
+## Modelagem de domínio
 
 | Princípio | Como foi aplicado |
 |-----------|-------------------|
@@ -103,7 +95,9 @@ POST /wallet/deposit
 
 **Entidades principais:** `User` → `Wallet` (1:1) → `Transaction` (1:N), com `counterpart_transaction_id` para transferências e `gateway_reference` UNIQUE para idempotência.
 
-### 3. API REST
+---
+
+## API REST
 
 | Método | Endpoint | Auth | Descrição |
 |--------|----------|------|-----------|
@@ -121,7 +115,9 @@ POST /wallet/deposit
 
 Documentação interativa: `http://localhost:8000/docs`
 
-### 4. Agente baseado em LLM
+---
+
+## Agente baseado em LLM
 
 | Ferramenta | Função |
 |------------|--------|
@@ -131,7 +127,7 @@ Documentação interativa: `http://localhost:8000/docs`
 | `get_top_transactions` | Top-N maiores/menores |
 | `get_transaction_detail` | Detalhe por UUID |
 
-**Garantias implementadas:**
+**Garantias:**
 
 - Todas as ferramentas são closures sobre `user_id` (`build_tools(repo, user_id)`)
 - Sessões multi-turn em memória (`InMemorySessionStore`)
@@ -151,7 +147,7 @@ Stripe foi escolhido por documentação madura, suporte a webhooks com HMAC e fa
 Preferido a concorrência otimista porque:
 
 - Operações financeiras exigem consistência forte
-- O volume esperado no desafio não justifica a complexidade de retry otimista
+- O volume esperado no estágio atual não justifica a complexidade de retry otimista
 - O padrão está documentado na TECHNICAL_SPEC §4.1
 
 ### Saques simulados por padrão
@@ -163,13 +159,13 @@ Payouts reais da Stripe pagam para a conta bancária da **plataforma**, não par
 
 Com `STRIPE_SIMULATE_PAYOUTS=false`, o fluxo usa a Payout API real + webhooks `payout.paid` / `payout.failed`.
 
-### Schema via `create_all` (sem Alembic)
+### Schema via `create_all` (sem Alembic em runtime)
 
-O README original indica que tabelas são criadas no startup. Alembic foi omitido para reduzir escopo; o DDL de referência está na TECHNICAL_SPEC §5.
+As tabelas são criadas no startup. Alembic está nas dependências para evolução futura; o DDL de referência está na TECHNICAL_SPEC §5.
 
 ### Sessões do agente em memória
 
-Adequado para o desafio. Em produção, persistir em Redis ou PostgreSQL.
+Adequado para desenvolvimento e demos. Em produção, persistir em Redis ou PostgreSQL.
 
 ### Duplicata de `gateway_reference`
 
@@ -177,7 +173,7 @@ A constraint `UNIQUE` no banco impede duplicatas, mas um segundo depósito com a
 
 ---
 
-## Como revisar (passo a passo)
+## Como validar localmente
 
 ### 1. Subir o ambiente
 
@@ -190,7 +186,6 @@ docker compose up --build
 
 ```bash
 docker compose exec api pytest -q
-# Esperado: 50 passed
 ```
 
 ### 3. Smoke test manual (opcional)
@@ -199,10 +194,10 @@ docker compose exec api pytest -q
 # Registrar e obter token
 curl -s -X POST http://localhost:8000/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"email":"reviewer@example.com","name":"Reviewer","password":"secret123"}'
+  -d '{"email":"dev@example.com","name":"Developer","password":"secret123"}'
 
 TOKEN=$(curl -s -X POST http://localhost:8000/auth/token \
-  -d "username=reviewer@example.com&password=secret123" | jq -r .access_token)
+  -d "username=dev@example.com&password=secret123" | jq -r .access_token)
 
 # Criar carteira
 curl -s http://localhost:8000/wallet -H "Authorization: Bearer $TOKEN"
@@ -232,13 +227,11 @@ curl -s -X POST http://localhost:8000/agent/chat \
 | `tests/integration/test_deposit_flow.py` | 4 | Depósito + webhook, idempotência, assinatura inválida |
 | `tests/integration/test_transactions.py` | 10 | Filtros, paginação, escopo por usuário |
 | `tests/integration/test_agent_chat.py` | 7 | Tool use, multi-turn, escopo, sessões |
-| **Total** | **50** | |
+| **Total** | **~50** | |
 
 ---
 
-## Mapa de arquivos implementados pelo candidato
-
-O repositório original trazia skeletons com `raise NotImplementedError`. A lógica abaixo foi **implementada**:
+## Mapa de módulos
 
 | Módulo | Arquivo | Responsabilidade |
 |--------|---------|------------------|
@@ -251,9 +244,7 @@ O repositório original trazia skeletons com `raise NotImplementedError`. A lóg
 | Agente | `src/agent/agent.py` | Loop tool-calling |
 | Agente | `src/agent/router.py` | `/agent/chat`, sessões |
 | Auth | `src/auth/router.py` | Register + login JWT |
-| Testes | `tests/unit/*`, `tests/integration/*` | Fakes + E2E |
-
-**Já vinham prontos (skeleton):** modelos ORM, schemas Pydantic, `database.py`, `config.py`, `docker-compose.yml`, estrutura de pastas.
+| Infra | `src/database.py`, `config.py`, `main.py` | Engine, settings, app factory |
 
 ---
 

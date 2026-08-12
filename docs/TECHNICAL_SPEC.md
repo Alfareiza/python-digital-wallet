@@ -4,7 +4,7 @@
 
 | Camada              | Escolha                                    | Justificativa                                        |
 |---------------------|--------------------------------------------|------------------------------------------------------|
-| Linguagem           | Python 3.11+                               | Obrigatório                                          |
+| Linguagem           | Python 3.11+                               | Tipagem moderna, ecossistema async                   |
 | Framework Web       | FastAPI                                    | Async, tipado, docs automáticos, padrão de mercado   |
 | ORM                 | SQLAlchemy 2.x (async)                     | Sessões async, controle fino de bloqueios            |
 | Banco de Dados      | PostgreSQL 15                              | ACID, bloqueio em nível de linha para saldo          |
@@ -15,66 +15,67 @@
 | Validação           | Pydantic v2                                | Schemas de request/response, settings                |
 | Testes              | pytest + pytest-asyncio + httpx            | Cliente de teste async                               |
 | LLM (padrão)        | `langchain-anthropic` (Claude)             | Adapter padrão; substitua por outro sem mudar código |
-| Container           | Docker + Docker Compose                    | Ambiente de execução obrigatório                     |
+| Container           | Docker + Docker Compose                    | Ambiente reproduzível local e em CI                  |
 
 ---
 
 ## 2. Estrutura do Projeto
 
-Legenda: **(skeleton)** já vem no repositório · **(você implementa)** você deve criar/completar.
-
 ```
-wallet-interview/
+virtual-wallet/
 ├── docs/
 │   ├── BUSINESS_SPEC.md
 │   ├── TECHNICAL_SPEC.md
-│   └── EVALUATION_CRITERIA.md
+│   ├── ARCHITECTURE.md
+│   └── AUTH_GUIDE.md
 │
 ├── src/
 │   ├── wallet/                    — domínio principal
-│   │   ├── models.py              — modelos ORM (SQLAlchemy)              (skeleton)
-│   │   ├── schemas.py             — schemas Pydantic de request/response  (skeleton)
-│   │   ├── service.py             — lógica de negócio (sem HTTP/DB)        (skeleton — a completar)
-│   │   ├── repository.py          — queries ao DB (sessões SQLAlchemy)     (skeleton — a completar)
-│   │   └── router.py              — rotas FastAPI                          (skeleton — a completar)
+│   │   ├── models.py              — modelos ORM (SQLAlchemy)
+│   │   ├── schemas.py             — schemas Pydantic de request/response
+│   │   ├── service.py             — lógica de negócio
+│   │   ├── repository.py          — queries ao DB (sessões SQLAlchemy)
+│   │   └── router.py              — rotas FastAPI
 │   │
 │   ├── gateway/                   — abstração de gateway de pagamento
-│   │   ├── base.py                — interface PaymentGateway (Protocol)    (skeleton)
-│   │   ├── webhook_handler.py     — verificação de webhook + despacho      (skeleton — a completar)
-│   │   └── <provider>_gateway.py  — implementação concreta (Stripe/MP)     (você implementa)
+│   │   ├── base.py                — interface PaymentGateway (Protocol)
+│   │   ├── webhook_handler.py     — verificação de webhook + despacho
+│   │   └── stripe_gateway.py      — implementação Stripe
 │   │
 │   ├── agent/                     — agente de consultas
-│   │   ├── tools.py               — definições de ferramentas              (skeleton — a completar)
-│   │   ├── session.py             — gerenciamento de sessão de conversa    (skeleton)
-│   │   └── agent.py               — loop LangChain com tool use            (skeleton — a completar)
+│   │   ├── tools.py               — definições de ferramentas
+│   │   ├── session.py             — gerenciamento de sessão de conversa
+│   │   ├── agent.py               — loop LangChain com tool use
+│   │   └── router.py              — rotas do agente
 │   │
 │   ├── auth/                      — autenticação
-│   │   ├── models.py                                                       (skeleton)
-│   │   ├── schemas.py                                                      (skeleton)
-│   │   ├── service.py                                                      (skeleton — a completar)
-│   │   └── router.py                                                       (skeleton — a completar)
+│   │   ├── models.py
+│   │   ├── schemas.py
+│   │   ├── service.py
+│   │   └── router.py
 │   │
-│   ├── database.py                — engine async + factory de sessão       (skeleton)
-│   ├── config.py                  — Pydantic Settings (env vars)           (skeleton)
-│   └── main.py                    — factory do app FastAPI + routers        (skeleton)
+│   ├── database.py                — engine async + factory de sessão
+│   ├── config.py                  — Pydantic Settings (env vars)
+│   └── main.py                    — factory do app FastAPI + routers
 │
 ├── tests/
 │   ├── unit/
-│   │   ├── test_wallet_service.py                                          (skeleton — casos a implementar)
-│   │   └── test_agent_tools.py                                            (skeleton — casos a implementar)
+│   │   ├── test_wallet_service.py
+│   │   └── test_agent_tools.py
 │   └── integration/
-│       ├── test_deposit_flow.py                                           (skeleton — casos a implementar)
-│       └── test_agent_chat.py                                             (skeleton — casos a implementar)
+│       ├── test_wallet_creation.py
+│       ├── test_deposit_flow.py
+│       ├── test_transactions.py
+│       └── test_agent_chat.py
 │
-│   # Criação de schema é decisão sua (ver §4 / §5). Se optar por Alembic,
-│   # inicialize-o (`alembic init alembic`) — ele não vem no skeleton.
-│
-├── docker-compose.yml                                                      (skeleton)
-├── Dockerfile                                                              (skeleton)
-├── pyproject.toml                                                          (skeleton)
-├── .env.example                                                            (skeleton)
-└── README.md                                                              (a completar — seção de decisões de design)
+├── docker-compose.yml
+├── Dockerfile
+├── pyproject.toml
+├── .env.example
+└── README.md
 ```
+
+Schema: as tabelas são criadas no startup via SQLAlchemy `create_all` (ver §5 para o DDL de referência).
 
 ---
 
