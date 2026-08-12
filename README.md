@@ -1,10 +1,16 @@
-# Virtual Wallet
+<h2 align="center">AI-Powered Digital Wallet</h2>
+<h2 align="center">
+<img alt="GitHub followers" src="https://img.shields.io/github/followers/Alfareiza?label=Follow%20me%20%3A%29&style=social">
+</h2>
 
-Carteira digital em Python com:
+----
 
-- API REST (FastAPI + PostgreSQL)
-- Integração com gateway de pagamento (Stripe)
-- Agente de IA para consultas em linguagem natural (Anthropic Claude com tool use via LangChain)
+## Overview
+
+Built a wallet platform where users move money through a REST API and ask questions in plain language (“What’s my balance?”, “Top expenses this month”) via an LLM agent with scoped tools, reducing the need for manual support lookups while keeping data isolated per user.
+
+*Stack:* Python, FastAPI, LangChain, Claude / OpenAI, PostgreSQL, Stripe, JWT, Docker Compose, pytest
+
 
 ## Arquitetura
 
