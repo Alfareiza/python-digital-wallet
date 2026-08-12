@@ -7,7 +7,7 @@
 
 ## Overview
 
-Built a wallet platform where users move money through a REST API and ask questions in plain language (“What’s my balance?”, “Top expenses this month”) via an LLM agent with scoped tools, reducing the need for manual support lookups while keeping data isolated per user.
+Carteira digital com AI onde os usuários movimentam dinheiro por uma API REST e fazem perguntas em linguagem natural (“Qual é o meu saldo?”, “Maiores despesas deste mês”) por meio de um agente LLM com ferramentas com escopo por usuário, reduzindo a necessidade de consultas manuais ao suporte e mantendo os dados isolados por usuário.
 
 *Stack:* Python, FastAPI, LangChain, Claude / OpenAI, PostgreSQL, Stripe, JWT, Docker Compose, pytest
 
